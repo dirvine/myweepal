@@ -6,12 +6,19 @@ from typing import Optional, Callable, Any
 from dataclasses import dataclass
 import numpy as np
 import sounddevice as sd
-import whisper
 import threading
 from queue import Queue
 import wave
 import tempfile
 import os
+
+# Try to import whisper, provide fallback if not available
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+    logging.warning("Whisper not available. ASR will use fallback mode.")
 
 logger = logging.getLogger(__name__)
 
@@ -65,13 +72,18 @@ class SpeechRecognizer:
 
     def _load_model(self) -> None:
         """Load Whisper model."""
+        if not WHISPER_AVAILABLE:
+            logger.warning("Whisper not available, using placeholder model")
+            self.model = None
+            return
+
         try:
             logger.info(f"Loading Whisper model: {self.model_size}")
             self.model = whisper.load_model(self.model_size)
             logger.info("Whisper model loaded successfully")
         except Exception as e:
             logger.error(f"Failed to load Whisper model: {e}")
-            raise RuntimeError(f"Model loading failed: {e}") from e
+            self.model = None
 
     def start_listening(self, callback: Optional[Callable[[TranscriptionResult], Any]] = None) -> None:
         """Start continuous listening.

@@ -6,11 +6,18 @@ from typing import Optional, Dict, Any
 from dataclasses import dataclass
 import numpy as np
 import sounddevice as sd
-from TTS.api import TTS
 import threading
 from queue import Queue
 import tempfile
 import os
+
+# Try to import TTS, provide fallback if not available
+try:
+    from TTS.api import TTS
+    TTS_AVAILABLE = True
+except ImportError:
+    TTS_AVAILABLE = False
+    logging.warning("TTS library not available. TTS will use fallback mode.")
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +52,11 @@ class TextToSpeech:
 
     def _initialize_tts(self) -> None:
         """Initialize TTS model."""
+        if not TTS_AVAILABLE:
+            logger.warning("TTS library not available, using placeholder")
+            self.tts = None
+            return
+
         try:
             logger.info(f"Initializing TTS model: {self.config.model_name}")
 
@@ -58,7 +70,7 @@ class TextToSpeech:
             logger.info("TTS initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize TTS: {e}")
-            raise RuntimeError(f"TTS initialization failed: {e}") from e
+            self.tts = None
 
     def speak(self, text: str, blocking: bool = False) -> bool:
         """Convert text to speech and play.

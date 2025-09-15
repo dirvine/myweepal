@@ -1,0 +1,184 @@
+# MyWeePal 2.0 Configuration
+
+app:
+  name: MyWeePal
+  version: 2.0.0
+  description: Local conversational life-story AI for Apple Silicon
+  author: David Irvine
+  location: Barr, Scotland
+
+models:
+  asr:
+    primary:
+      name: whisper-large-v3-turbo
+      provider: mlx-community
+      config:
+        local_attention: true
+        context_size: 256
+        chunk_duration: 2.0
+        overlap_duration: 0.5
+        energy_threshold: 0.01
+        language: en
+    fallback:
+      name: whisper-base
+      provider: mlx-community
+
+  tts:
+    primary:
+      name: Kokoro-82M-bf16
+      provider: mlx-community
+      config:
+        default_emotion: 0.5
+        max_chunk_size: 500
+        enable_watermark: true
+        sample_rate: 24000
+    voices:
+      - name: narrator
+        emotion: 0.5
+        speed: 1.0
+        pitch: 1.0
+      - name: empathetic
+        emotion: 0.7
+        speed: 0.95
+        pitch: 1.05
+      - name: professional
+        emotion: 0.3
+        speed: 1.0
+        pitch: 0.98
+      - name: excited
+        emotion: 0.9
+        speed: 1.1
+        pitch: 1.1
+
+  llm:
+    primary:
+      name: Qwen3-4B-Thinking-2507-4bit
+      provider: mlx-community
+      config:
+        max_tokens: 512
+        temperature: 0.7
+        top_p: 0.9
+        repetition_penalty: 1.1
+        context_window: 8192
+        system_prompt: |
+          You are MyWeePal, a warm, empathetic AI companion helping preserve life stories.
+          You speak with a gentle Scottish charm when appropriate, but always remain clear and understanding.
+          Your goal is to help people capture, organize, and share their memories in meaningful ways.
+
+memory:
+  vector_db:
+    provider: chromadb
+    path: ./data/chroma_v2
+    collection: life_stories
+    embedding_model: sentence-transformers/all-MiniLM-L6-v2
+    max_results: 10
+
+  conversation:
+    max_history: 50
+    context_window: 10
+    summarization_threshold: 30
+
+vision:
+  emotion_detection:
+    enabled: true
+    model: fer
+    emotions:
+      - happy
+      - sad
+      - neutral
+      - excited
+      - calm
+      - angry
+      - fearful
+      - surprised
+    confidence_threshold: 0.6
+
+  face_recognition:
+    enabled: false  # Disabled due to dependency issues
+    model: face_recognition
+    encoding_model: hog
+    tolerance: 0.6
+
+audio:
+  input:
+    device: default
+    channels: 1
+    sample_rate: 16000
+    chunk_size: 1024
+
+  output:
+    device: default
+    channels: 2
+    sample_rate: 24000
+    buffer_size: 2048
+
+api:
+  server:
+    host: 0.0.0.0
+    port: 8000
+    cors_enabled: true
+    cors_origins:
+      - http://localhost:3000
+      - http://localhost:8080
+
+  websocket:
+    host: 0.0.0.0
+    port: 8001
+    heartbeat_interval: 30
+    max_connections: 100
+
+  gradio:
+    enabled: true
+    share: false
+    server_name: 0.0.0.0
+    server_port: 7860
+    auth: null
+
+features:
+  voice_cloning:
+    enabled: true
+    min_sample_duration: 6.0
+    max_samples: 5
+
+  emotion_awareness:
+    enabled: true
+    detection_interval: 5.0
+    influence_factor: 0.3
+
+  streaming:
+    enabled: true
+    buffer_size: 1024
+    latency_target: 200
+
+  auto_save:
+    enabled: true
+    interval: 300
+    backup_count: 3
+
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: logs/myweepal.log
+  max_size: 10485760  # 10MB
+  backup_count: 5
+  console: true
+
+performance:
+  max_memory_gb: 16
+  gpu_memory_fraction: 0.8
+  model_cache_size_gb: 5
+  batch_size: 1
+  num_threads: 4
+
+security:
+  enable_auth: false
+  api_key_header: X-API-Key
+  session_timeout: 3600
+  max_request_size: 10485760  # 10MB
+
+paths:
+  models: ~/.myweepal/models
+  voices: ~/.myweepal/voices
+  memories: ./data/memories
+  exports: ./data/exports
+  temp: /tmp/myweepal

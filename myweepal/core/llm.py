@@ -15,12 +15,13 @@ logger = logging.getLogger(__name__)
 class LLMConfig:
     """Configuration for LLM inference."""
 
-    model_name: str = "mlx-community/Llama-3.2-3B-Instruct-4bit"
-    max_tokens: int = 256
+    model_name: str = "mlx-community/Qwen3-4B-Thinking-2507-4bit"  # Updated to Qwen
+    max_tokens: int = 512  # Increased for better reasoning
     temperature: float = 0.7
     top_p: float = 0.9
     repetition_penalty: float = 1.1
     cache_size: int = 512
+    context_window: int = 8192  # Qwen supports larger context
 
 
 class LLMInference:
@@ -159,6 +160,12 @@ class LLMInference:
         Returns:
             Formatted prompt string
         """
+        # Qwen-specific formatting for thinking model
+        if "Qwen" in self.config.model_name:
+            if system_prompt:
+                return f"System: {system_prompt}\n\nUser: {prompt}\n\nAssistant:"
+            return f"User: {prompt}\n\nAssistant:"
+        # Fallback to standard format
         if system_prompt:
             return f"<|system|>{system_prompt}<|user|>{prompt}<|assistant|>"
         return f"<|user|>{prompt}<|assistant|>"

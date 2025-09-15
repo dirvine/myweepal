@@ -1,71 +1,61 @@
-[tool.poetry]
+[project]
 name = "myweepal"
-version = "0.1.0"
+version = "2.0.0"
 description = "Local conversational life-story AI for Apple Silicon"
-authors = ["David Irvine <david@saorsalabs.com>"]
 readme = "README.md"
-python = "^3.10"
+requires-python = ">=3.11"
+authors = [
+    { name = "David Irvine", email = "david@maidsafe.com" }
+]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-mlx = "^0.21.0"
-mlx-lm = "^0.20.0"
-numpy = "^1.24.0"
-opencv-python = "^4.8.0"
-torch = "^2.0.0"
-transformers = "^4.36.0"
-whisper = "^1.1.10"
-chromadb = "^0.4.22"
-pydantic = "^2.5.0"
-fastapi = "^0.109.0"
-uvicorn = "^0.27.0"
-python-multipart = "^0.0.6"
-aiofiles = "^23.2.1"
-sounddevice = "^0.4.6"
-scipy = "^1.11.0"
-TTS = "^0.22.0"
-face-recognition = "^1.3.0"
-fer = "^22.5.1"
-python-dotenv = "^1.0.0"
-typer = "^0.9.0"
-rich = "^13.7.0"
+dependencies = [
+    # Core ML Framework
+    "mlx>=0.21.0",
+    "mlx-lm>=0.20.0",
+    # Speech Recognition
+    # Note: mlx-whisper has incompatible dependencies for Python 3.11
+    # Will install separately or use alternative
+    # Audio Processing
+    "sounddevice>=0.4.6",
+    "scipy>=1.11.0",
+    "librosa>=0.10.1", # Newer version for Python 3.11 compatibility
+    "audiofile>=1.3.0",
+    "torchaudio>=2.0.0",
+    "numba>=0.57.0", # Force newer version for Python 3.11
+    # Vision & Emotion
+    "opencv-python>=4.8.0",
+    # fer and face-recognition will be installed separately due to dependency conflicts
+    # Vector Database & Memory
+    "chromadb>=0.4.22",
+    "sentence-transformers>=2.2.0",
+    # API & Web Interface
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "gradio>=4.0.0",
+    "websockets>=12.0",
+    # Utilities
+    "numpy>=1.24.0",
+    "pydantic>=2.5.0",
+    "python-dotenv>=1.0.0",
+    "typer>=0.9.0",
+    "rich>=13.7.0",
+    "aiofiles>=23.2.1",
+    "python-multipart>=0.0.6",
+    "ffmpeg-python>=0.2.0",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.4.0"
-pytest-asyncio = "^0.21.0"
-pytest-cov = "^4.1.0"
-black = "^23.12.0"
-ruff = "^0.1.0"
-mypy = "^1.8.0"
-pre-commit = "^3.6.0"
+[project.optional-dependencies]
+# Optional dependencies for advanced features
+emotion = ["fer>=22.4.0"]
+whisper = ["openai-whisper>=20231117"]
+tts = ["TTS>=0.22.0"]
+speaker = ["speechbrain>=1.0.0", "pyannote-audio>=3.1.0"]
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.black]
-line-length = 100
-target-version = ['py310']
-
-[tool.ruff]
-line-length = 100
-select = ["E", "F", "I", "N", "W", "B", "C90", "D", "UP", "S", "T", "A", "C4", "PIE", "RET", "SIM", "ARG", "PTH", "ERA", "PL", "PERF", "RUF"]
-ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107"]
-
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_any_unimported = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-check_untyped_defs = true
-strict_equality = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-addopts = "--cov=myweepal --cov-report=term-missing --cov-report=html --cov-fail-under=85"
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+]

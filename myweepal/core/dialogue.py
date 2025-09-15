@@ -11,9 +11,11 @@ from pathlib import Path
 
 from myweepal.core.llm import LLMInference, LLMConfig
 from myweepal.core.memory import MemoryStore, Memory
+from myweepal.core.personalized_memory import PersonalizedMemorySystem, PrivacyLevel
 from myweepal.vision.emotion import EmotionDetector, EmotionState
 from myweepal.audio.asr import SpeechRecognizer, TranscriptionResult
 from myweepal.audio.tts import TextToSpeech, TTSConfig
+from myweepal.audio.speaker_recognition import SpeakerRecognitionSystem, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,8 @@ class ConversationState:
     engagement_level: float
     session_start: float
     last_interaction: float
+    current_speaker_id: Optional[str] = None
+    current_speaker_name: Optional[str] = None
 
 
 class DialogueManager:
@@ -55,6 +59,7 @@ class DialogueManager:
         tts_config: Optional[TTSConfig] = None,
         memory_persist_dir: str = "./data/chroma",
         question_bank_path: Optional[str] = None,
+        enable_speaker_recognition: bool = True,
     ):
         """Initialize dialogue manager.
 
@@ -63,13 +68,25 @@ class DialogueManager:
             tts_config: TTS configuration
             memory_persist_dir: Directory for memory storage
             question_bank_path: Path to question bank JSON
+            enable_speaker_recognition: Enable speaker recognition
         """
         # Initialize components
         self.llm = LLMInference(llm_config)
-        self.memory_store = MemoryStore(memory_persist_dir)
+        self.memory_store = MemoryStore(memory_persist_dir)  # Legacy memory store
         self.emotion_detector = EmotionDetector()
         self.speech_recognizer = SpeechRecognizer()
         self.tts = TextToSpeech(tts_config)
+
+        # Initialize new components
+        self.enable_speaker_recognition = enable_speaker_recognition
+        if enable_speaker_recognition:
+            self.speaker_system = SpeakerRecognitionSystem()
+            self.personalized_memory = PersonalizedMemorySystem(
+                db_path=Path(memory_persist_dir).parent / "personalized_memory"
+            )
+        else:
+            self.speaker_system = None
+            self.personalized_memory = None
 
         # Conversation state
         self.state = ConversationState(
@@ -435,4 +452,181 @@ Generate a brief, empathetic acknowledgment of what they shared, showing you're 
             "user_mood": self.state.user_mood,
             "engagement_level": self.state.engagement_level,
             "is_active": self.is_active,
+            "current_speaker": self.state.current_speaker_name,
         }
+
+    def enroll_speaker(self, audio_path: str, name: str, role: str = "family") -> Tuple[bool, str]:
+        """Enroll a new speaker for recognition.
+
+        Args:
+            audio_path: Path to enrollment audio (10-30 seconds)
+            name: Speaker's name
+            role: User role (prime, family, guest)
+
+        Returns:
+            Success status and user ID or error message
+        """
+        if not self.speaker_system:
+            return False, "Speaker recognition not enabled"
+
+        # Map role string to enum
+        role_map = {
+            "prime": UserRole.PRIME,
+            "family": UserRole.FAMILY,
+            "guest": UserRole.GUEST,
+        }
+        user_role = role_map.get(role.lower(), UserRole.FAMILY)
+
+        # Enroll speaker
+        success, result = self.speaker_system.enroll_speaker(
+            audio_path, name, user_role
+        )
+
+        if success:
+            # Create personalized memory profile
+            if self.personalized_memory:
+                self.personalized_memory.create_user_profile(
+                    user_id=result,
+                    name=name,
+                    preferences={
+                        "role": role,
+                        "enrolled_at": time.time()
+                    }
+                )
+            logger.info(f"Successfully enrolled speaker: {name} ({result})")
+        else:
+            logger.error(f"Failed to enroll speaker: {result}")
+
+        return success, result
+
+    def identify_current_speaker(self, audio: np.ndarray) -> Optional[str]:
+        """Identify speaker from audio.
+
+        Args:
+            audio: Audio samples
+
+        Returns:
+            Speaker ID or None
+        """
+        if not self.speaker_system:
+            return None
+
+        user_id, confidence, _ = self.speaker_system.identify_speaker(audio)
+
+        if user_id and confidence > 0.7:
+            # Update conversation state
+            speaker_info = self.speaker_system.get_speaker_info(user_id)
+            if speaker_info:
+                self.state.current_speaker_id = user_id
+                self.state.current_speaker_name = speaker_info["name"]
+                logger.info(f"Identified speaker: {speaker_info['name']} (confidence: {confidence:.2f})")
+            return user_id
+
+        return None
+
+    def _process_user_response_with_speaker(self, text: str, emotion: Optional[EmotionState]) -> None:
+        """Process user response with speaker identification.
+
+        Args:
+            text: User's response text
+            emotion: Current emotion state
+        """
+        # Store memory based on speaker
+        if self.personalized_memory and self.state.current_speaker_id:
+            # Store in personalized memory
+            current_question = self._get_current_question()
+
+            # Determine privacy level based on content
+            privacy = PrivacyLevel.PRIVATE
+            if "family" in text.lower() or "everyone" in text.lower():
+                privacy = PrivacyLevel.FAMILY
+
+            success, memory_id = self.personalized_memory.store_memory(
+                user_id=self.state.current_speaker_id,
+                content=f"Q: {current_question}\nA: {text}",
+                context={
+                    "phase": self.state.phase.value,
+                    "emotion": emotion.dominant_emotion if emotion else "neutral",
+                    "session_time": time.time() - self.state.session_start,
+                },
+                privacy=privacy,
+                importance=0.8,
+                tags=[self.state.phase.value, "life_story"]
+            )
+
+            if success:
+                self.session_memories.append(memory_id)
+        else:
+            # Fall back to legacy memory store
+            self._process_user_response(text, emotion)
+
+    def get_personalized_context(self, user_id: str, topic: str) -> str:
+        """Get personalized context for a user.
+
+        Args:
+            user_id: User identifier
+            topic: Topic to search for
+
+        Returns:
+            Personalized context string
+        """
+        if not self.personalized_memory:
+            return ""
+
+        memories = self.personalized_memory.retrieve_memories(
+            user_id=user_id,
+            query=topic,
+            include_shared=True,
+            max_results=5
+        )
+
+        if not memories:
+            return ""
+
+        context_parts = []
+        for memory in memories:
+            context_parts.append(memory.content)
+
+        return "\n\n".join(context_parts)
+
+    def list_enrolled_speakers(self) -> List[Dict[str, Any]]:
+        """List all enrolled speakers.
+
+        Returns:
+            List of speaker information
+        """
+        if not self.speaker_system:
+            return []
+
+        speakers = []
+        for user_id, profile in self.speaker_system.profiles.items():
+            speakers.append({
+                "user_id": user_id,
+                "name": profile.name,
+                "role": profile.role.value,
+                "enrolled_at": profile.created_at.isoformat(),
+                "last_seen": profile.last_seen.isoformat() if profile.last_seen else None,
+            })
+
+        return speakers
+
+    def remove_speaker(self, user_id: str) -> bool:
+        """Remove an enrolled speaker.
+
+        Args:
+            user_id: User ID to remove
+
+        Returns:
+            Success status
+        """
+        if not self.speaker_system:
+            return False
+
+        # Remove from speaker system
+        removed = self.speaker_system.remove_speaker(user_id)
+
+        # Clear personalized memories if requested
+        if removed and self.personalized_memory:
+            self.personalized_memory.clear_user_memories(user_id, confirm=True)
+
+        return removed

@@ -6,9 +6,17 @@ from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 import cv2
 import numpy as np
-from fer import FER
 import threading
 from queue import Queue
+
+# Try to import FER, but provide fallback if not available
+try:
+    from fer import FER
+    FER_AVAILABLE = True
+except ImportError:
+    FER_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("FER library not available. Emotion detection will use fallback mode.")
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +52,7 @@ class EmotionDetector:
         self.detection_interval = detection_interval
         self.enable_display = enable_display
 
-        self.detector = FER(mtcnn=True)
+        self.detector = FER(mtcnn=True) if FER_AVAILABLE else None
         self.capture = None
         self.is_running = False
         self.emotion_queue = Queue(maxsize=10)
@@ -136,6 +144,17 @@ class EmotionDetector:
             Detected emotion state or None
         """
         try:
+            # Check if detector is available
+            if not self.detector:
+                # Fallback: return neutral emotion
+                return EmotionState(
+                    dominant_emotion="neutral",
+                    emotion_scores={"neutral": 1.0},
+                    timestamp=timestamp,
+                    face_detected=False,
+                    confidence=0.5,
+                )
+
             # Detect emotions
             result = self.detector.detect_emotions(frame)
 
