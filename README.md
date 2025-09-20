@@ -1,5 +1,7 @@
 # MyWeePal 2.0 🤖
 
+## CURRENTLY EXPERIMENTAL - NOT USABLE FOR PRODUCTION YET !!!
+
 **Local Conversational Life-Story AI with Multi-User Support for Apple Silicon**
 
 MyWeePal is a privacy-focused, locally-running AI assistant that conducts empathetic interviews to capture and preserve life stories. Now with **speaker recognition** and **personalized memories** for multiple users. Built specifically for Apple Silicon Macs using MLX framework for optimal performance.
